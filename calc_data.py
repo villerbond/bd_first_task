@@ -52,7 +52,7 @@ def main():
 
     t_end = time.perf_counter()
 
-    print(f"Total time: {t_end - t_start:.2f}s", file=sys.stderr)
+    # print(f"Total time: {t_end - t_start:.2f}s", file=sys.stderr)
     print(f"sum={total_sum}")
     print(f"min={total_min}")
     print(f"max={total_max}")
