@@ -3,9 +3,25 @@ import os
 import time
 import mmap
 import numpy as np
+import multiprocessing as mp
 
 CHUNK_BYTES = 256 * 1024 * 1024
 
+def process_chunk(args):
+    filepath, offset, size = args
+
+    with open(filepath, "rb") as f:
+        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        chunk = mm[offset:offset + size]
+
+        data = np.frombuffer(chunk, dtype=">u4")
+
+        chunk_sum = int(data.sum(dtype=np.uint64))
+        chunk_min = int(data.min())
+        chunk_max = int(data.max())
+
+        return chunk_sum, chunk_min, chunk_max
+    
 def main():
     if len(sys.argv) != 2:
         print("help: python calc_data.py <path_to_file>")
@@ -16,18 +32,23 @@ def main():
     filepath = sys.argv[1]
     file_size = os.path.getsize(filepath)
 
-    total_sum = 0
-    total_min = 4294967295
-    total_max = 0
+    tasks = []
+    offset = 0
 
-    with open(filepath, "rb") as f:
-        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        for offset in range(0, file_size, CHUNK_BYTES):
-            chunk = mm[offset:offset + CHUNK_BYTES]
-            data = np.frombuffer(chunk, dtype=">u4")
-            total_sum += int(data.sum(dtype=np.uint64))
-            total_min = min(total_min, int(data.min()))
-            total_max = max(total_max, int(data.max()))
+    while offset < file_size:
+        size = min(CHUNK_BYTES, file_size - offset)
+
+        tasks.append((filepath, offset, size))
+        offset += size
+
+    workers = min(mp.cpu_count(), len(tasks))
+
+    with mp.Pool(processes=workers) as pool:
+        results = pool.map(process_chunk, tasks)
+
+    total_sum = sum(r[0] for r in results)
+    total_min = min(r[1] for r in results)
+    total_max = max(r[2] for r in results)
 
     t_end = time.perf_counter()
 
